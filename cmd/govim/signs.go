@@ -13,22 +13,12 @@ const signGroup = "govim"
 // highlight type and passed in as name to sign_define().
 const signSuffix = "Sign"
 
-// Each sign in vim has a priority. If there are multiple signs on the same line, it
-// is the one with highest priority that shows. For details see ":help sign-priority".
-// The default priority in vim, if not specified, is 10.
-var signPriority = map[types.Severity]int{
-	types.SeverityErr:  14,
-	types.SeverityWarn: 12,
-	types.SeverityInfo: 10,
-	types.SeverityHint: 8,
-}
-
 // signName is used to map a priority to the defined sign type (i.e. "sign name")
 var signName = map[int]string{
-	signPriority[types.SeverityErr]:  types.HighlightErr + signSuffix,
-	signPriority[types.SeverityWarn]: types.HighlightWarn + signSuffix,
-	signPriority[types.SeverityInfo]: types.HighlightInfo + signSuffix,
-	signPriority[types.SeverityHint]: types.HighlightHint + signSuffix,
+	types.SeverityPriority[types.SeverityErr]:  types.HighlightSignErr + signSuffix,
+	types.SeverityPriority[types.SeverityWarn]: types.HighlightSignWarn + signSuffix,
+	types.SeverityPriority[types.SeverityInfo]: types.HighlightSignInfo + signSuffix,
+	types.SeverityPriority[types.SeverityHint]: types.HighlightSignHint + signSuffix,
 }
 
 // defineDict is the representation of arguments used in vim's sign_define()
@@ -39,7 +29,7 @@ type defineDict struct {
 
 // signDefine defines the sign types (sign names) and must be called once before placing any signs
 func (v *vimstate) signDefine() error {
-	for _, hi := range []string{types.HighlightErr, types.HighlightWarn, types.HighlightInfo, types.HighlightHint} {
+	for _, hi := range []string{types.HighlightSignErr, types.HighlightSignWarn, types.HighlightSignInfo, types.HighlightSignHint} {
 		arg := defineDict{
 			Text:          ">>",
 			TextHighlight: hi,
@@ -136,7 +126,10 @@ func (v *vimstate) redefineSigns(fixes []types.Diagnostic) error {
 	// delete existing entries from the list of signs to removed
 	inx := 0
 	for _, f := range fixes {
-		priority, ok := signPriority[f.Severity]
+		// Each sign in vim has a priority. If there are multiple signs on the same line, it
+		// is the one with highest priority that shows. For details see ":help sign-priority".
+		// The default priority in vim, if not specified, is 10.
+		priority, ok := types.SeverityPriority[f.Severity]
 		if !ok {
 			v.Logf("no sign priority defined for severity: %v", f.Severity)
 			continue

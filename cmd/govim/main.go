@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -221,6 +222,22 @@ func newplugin(goplspath string, goplsEnv []string, defaults *config.Config) *go
 	return res
 }
 
+func (g *govimplugin) defineHighlights() {
+	warnColor := 166 // Orange
+	if vimColors, err := strconv.Atoi(g.ParseString(g.ChannelExpr(`&t_Co`))); err != nil || vimColors < 256 {
+		warnColor = 3 // Yellow, fallback when the terminal doesn't support at least 256 colors
+	}
+	g.ChannelExf("highlight default %s term=underline cterm=underline gui=undercurl ctermfg=9", types.HighlightErr)
+	g.ChannelExf("highlight default %s term=underline cterm=underline gui=undercurl ctermfg=%d guisp=Orange guifg=Orange", types.HighlightWarn, warnColor)
+	g.ChannelExf("highlight default %s term=underline cterm=underline gui=undercurl ctermfg=6 guisp=Cyan guifg=Cyan", types.HighlightInfo)
+	g.ChannelExf("highlight default link %s %s", types.HighlightHint, types.HighlightInfo)
+
+	g.ChannelExf("highlight default link %s ErrorMsg", types.HighlightSignErr)
+	g.ChannelExf("highlight default %s ctermfg=15 ctermbg=%d guisp=Orange guifg=Orange", types.HighlightSignWarn, warnColor)
+	g.ChannelExf("highlight default %s ctermfg=15 ctermbg=6 guisp=Cyan guifg=Cyan", types.HighlightSignInfo)
+	g.ChannelExf("highlight default link %s %s", types.HighlightSignHint, types.HighlightSignInfo)
+}
+
 func (g *govimplugin) Init(gg govim.Govim, errCh chan error) error {
 	g.Driver.Govim = gg
 	g.vimstate.Driver.Govim = gg.Scheduled()
@@ -249,9 +266,17 @@ func (g *govimplugin) Init(gg govim.Govim, errCh chan error) error {
 	g.DefineCommand(string(config.CommandRename), g.vimstate.rename, govim.NArgsZeroOrOne)
 	g.DefineCommand(string(config.CommandStringFn), g.vimstate.stringfns, govim.RangeLine, govim.CompleteCustomList(PluginPrefix+config.FunctionStringFnComplete), govim.NArgsOneOrMore)
 	g.DefineFunction(string(config.FunctionStringFnComplete), []string{"ArgLead", "CmdLine", "CursorPos"}, g.vimstate.stringfncomplete)
+
+	g.defineHighlights()
+
 	if g.placeSigns() {
 		if err := g.vimstate.signDefine(); err != nil {
 			return fmt.Errorf("failed to define signs: %v", err)
+		}
+	}
+	if g.highlightDiagnostics() {
+		if err := g.vimstate.textpropDefine(); err != nil {
+			return fmt.Errorf("failed to defined text property types: %v", err)
 		}
 	}
 	g.DefineFunction(string(config.FunctionMotion), []string{"direction", "target"}, g.vimstate.motion)
@@ -416,6 +441,16 @@ func (g *govimplugin) placeSigns() bool {
 		return false
 	}
 	if os.Getenv(testsetup.EnvDisableSignPlace) == "true" {
+		return false
+	}
+	return true
+}
+
+func (g *govimplugin) highlightDiagnostics() bool {
+	if g.Flavor() != govim.FlavorVim && g.Flavor() != govim.FlavorGvim {
+		return false
+	}
+	if os.Getenv(testsetup.EnvDisableHighlightDiags) == "true" {
 		return false
 	}
 	return true

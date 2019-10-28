@@ -95,5 +95,11 @@ func (v *vimstate) redefineDiagnostics() error {
 			v.Logf("redefineDiagnostics: failed to place/remove signs: %v", err)
 		}
 	}
+
+	if v.highlightDiagnostics() {
+		if err := v.redefineHighlights(diags); err != nil {
+			v.Logf("redefineDiagnostics: failed to apply highlights: %v", err)
+		}
+	}
 	return nil
 }
