@@ -155,8 +155,7 @@ type govimImpl struct {
 	funcHandlers     map[string]handler
 	funcHandlersLock sync.Mutex
 
-	plugin      Plugin
-	pluginErrCh chan error
+	plugin Plugin
 
 	flushEvents chan struct{}
 
@@ -311,10 +310,10 @@ func (g *govimImpl) load() error {
 	}
 
 	if g.plugin != nil {
-		g.pluginErrCh = make(chan error)
+		pluginErrCh := make(chan error, 1)
 
 		g.tomb.Go(func() error {
-			return <-g.pluginErrCh
+			return <-pluginErrCh
 		})
 
 		err := g.DoProto(func() error {
@@ -337,7 +336,7 @@ func (g *govimImpl) load() error {
 			}
 			g.Logf("Loaded against %v %v\n", g.flavor, g.version)
 
-			return g.plugin.Init(g, g.pluginErrCh)
+			return g.plugin.Init(g, pluginErrCh)
 		})
 		if err != nil {
 			return err
@@ -409,13 +408,7 @@ func (g *govimImpl) Run() error {
 		shutdownErr = g.plugin.Shutdown()
 		close(g.shutdown)
 	}
-	if g.pluginErrCh != nil {
-		close(g.pluginErrCh)
-	}
-	if shutdownErr != nil {
-		return shutdownErr
-	}
-	return nil
+	return shutdownErr
 }
 
 // run is the main loop that handles call from Vim

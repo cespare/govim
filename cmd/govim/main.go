@@ -17,7 +17,6 @@ import (
 
 	"github.com/govim/govim"
 	"github.com/govim/govim/cmd/govim/config"
-	"github.com/govim/govim/cmd/govim/internal/golang_org_x_tools/jsonrpc2"
 	"github.com/govim/govim/cmd/govim/internal/golang_org_x_tools/lsp/protocol"
 	"github.com/govim/govim/cmd/govim/internal/golang_org_x_tools/span"
 	"github.com/govim/govim/cmd/govim/internal/types"
@@ -148,12 +147,8 @@ type govimplugin struct {
 	// set in os/exec.Command.Env
 	goplsEnv []string
 
-	goplspath   string
-	gopls       *os.Process
-	goplsConn   jsonrpc2.Conn
-	goplsCancel context.CancelFunc
-	goplsStdin  io.WriteCloser
-	server      protocol.Server
+	goplspath string
+	server    *goplsServer
 
 	isGui bool
 
@@ -371,16 +366,11 @@ func (g *govimplugin) Shutdown() error {
 	}
 	os.RemoveAll(g.socketDir) // see note above
 
-	// Shutdown gopls
-	//
-	// We "kill" gopls by closing its stdin. Standard practice for processes
-	// that communicate over stdin/stdout is to exit cleanly when stdin is
-	// closed.
 	if err := g.server.Shutdown(context.Background()); err != nil {
 		return fmt.Errorf("failed to call gopls Shutdown: %v", err)
 	}
-	if err := g.goplsStdin.Close(); err != nil {
-		return fmt.Errorf("failed to close gopls stdin: %v", err)
+	if err := g.server.stop(); err != nil {
+		return fmt.Errorf("failed to close gopls process: %v", err)
 	}
 
 	// Shutdown the filewatcher
